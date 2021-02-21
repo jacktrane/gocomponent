@@ -1,7 +1,6 @@
 package httpreq
 
 import (
-	"app/common/logger"
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
@@ -256,7 +255,6 @@ func (h *HttpRequest) Bytes() ([]byte, error) {
 	defer resp.Body.Close()
 	h.respBody, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		logger.Errorf("%v", err)
 		return nil, err
 	}
 	return h.respBody, nil
