@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jacktrane/gocomponent/logger"
 
 	"github.com/jacktrane/gocomponent/time_format"
 )
@@ -35,7 +36,7 @@ type RedoConfig struct {
 func (r RedoConfig) defaultParam() {
 	// TODO 不填则放置在内存中，但这里有个问题，会不会把内存打爆了？
 	// if r.RedoFileNameWithPath == "" {
-	// 	r.RedoFileNameWithPath = "../log/data"
+	// 	r.RedoFileNameWithPath = "../logger/data"
 	// }
 	if r.SliceFileInterval == 0 {
 		r.SliceFileInterval = time_format.OneDay
@@ -81,16 +82,16 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 
 	// 保证machine一定有并且需要具备指定的状态码
 	if conf.Machine == nil {
-		log.Fatal("machine 不存在")
+		logger.Fatal("machine 不存在")
 	}
 
 	// 强行要加一个状态码
 	machineValue := reflect.ValueOf(conf.Machine).FieldByName("StatCode")
 	if !machineValue.IsValid() {
-		log.Fatal("machine 不存在 StatCode 字段")
+		logger.Fatal("machine 不存在 StatCode 字段")
 	}
 	if machineValue.Type().Name() != "int" {
-		log.Fatal("machine中StatCode字段类型不为int")
+		logger.Fatal("machine中StatCode字段类型不为int")
 	}
 
 	// 切割文件目前支持最低的切割粒度是小时级别
@@ -100,7 +101,7 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 	}
 
 	if err := ra.initFile(); err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 	ra.setMachine()
 	return &ra
@@ -110,14 +111,14 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 func (r *redoAction) StableAction(machine StatMachine) {
 	err := machine.Run()
 	if err != nil { // 错误不反悔
-		log.Printf("RunErr=%s failLine=%s\n", err, machine)
+		logger.Warnf("RunErr=%s failLine=%s\n", err, machine)
 		err, strDumpData := r.dump(machine)
 		if err != nil {
-			log.Printf("dump=%s redo\n", strDumpData)
+			logger.Warnf("dump=%s redo\n", strDumpData)
 		}
 		_, err = r.failFile.WriteString(strDumpData)
 		if err != nil {
-			log.Printf("WriteString=%s redo\n", strDumpData)
+			logger.Warnf("WriteString=%s redo\n", strDumpData)
 		}
 	}
 }
@@ -129,7 +130,7 @@ func (r *redoAction) initFile() error {
 	// 打开文件fd
 	if r.conf.RedoFileNameWithPath != "" {
 		if err := os.MkdirAll(path.Dir(r.conf.RedoFileNameWithPath), os.ModePerm); err != nil {
-			log.Printf("mkdir %s err=%s\n", path.Dir(r.conf.RedoFileNameWithPath), err)
+			logger.Errorf("mkdir %s err=%s\n", path.Dir(r.conf.RedoFileNameWithPath), err)
 			return err
 		}
 	}
@@ -139,7 +140,7 @@ func (r *redoAction) initFile() error {
 	var err error
 	err, r.succFile, r.failFile = r.getLogFile(r.nowDate)
 	if err != nil {
-		log.Printf("getLogFile nowDate=%s err=%s\n", r.nowDate, err)
+		logger.Errorf("getLogFile nowDate=%s err=%s\n", r.nowDate, err)
 		return err
 	}
 
@@ -148,13 +149,13 @@ func (r *redoAction) initFile() error {
 	beforeDate := now.Add(d).Format(r.logDateFormat)
 	err, beforeSuccFile, beforeFailFile := r.getLogFile(beforeDate)
 	if err != nil {
-		log.Printf("getLogFile nowDate=%s err=%s\n", beforeDate, err)
+		logger.Errorf("getLogFile nowDate=%s err=%s\n", beforeDate, err)
 		return err
 	}
 
 	err, diffLines, _ := r.diff(beforeSuccFile, beforeFailFile)
 	if err != nil {
-		log.Printf("diff err=%s\n", err)
+		logger.Errorf("diff err=%s\n", err)
 		return err
 	}
 
@@ -162,7 +163,7 @@ func (r *redoAction) initFile() error {
 	if len(diffLines) != 0 {
 		failLines, err := ioutil.ReadFile(r.failFile.Name())
 		if err != nil {
-			log.Printf("ReadFile failFile=%s err=%s\n", r.failFile.Name(), err)
+			logger.Errorf("ReadFile failFile=%s err=%s\n", r.failFile.Name(), err)
 			return err
 		}
 		arrFailLine := strings.Split(string(failLines), "\n")
@@ -175,10 +176,10 @@ func (r *redoAction) initFile() error {
 			if !mapFailLine[diffLine] {
 				_, errLine := r.failFile.WriteString(diffLine + "\n")
 				if errLine != nil {
-					log.Printf("writeString err=%s str=%s \n", errLine, diffLine)
+					logger.Warnf("writeString err=%s str=%s \n", errLine, diffLine)
 				}
 			} else {
-				log.Printf("existed str=%s\n", diffLine)
+				logger.Warnf("existed str=%s\n", diffLine)
 			}
 		}
 	}
@@ -231,7 +232,7 @@ func (r *redoAction) formatLogFile(bSuccFile bool, dateStr string) (error, *os.F
 	if err != nil {
 		return err, nil
 	}
-	log.Printf("fileName=%s succOpen", fileName)
+	logger.Infof("fileName=%s succOpen", fileName)
 	// if bSuccFile {
 	// 	r.succFile = file
 	// } else {
@@ -279,7 +280,7 @@ func (r *redoAction) setMachine() {
 func (r *redoAction) retryPoll() {
 	for {
 		if r.exitFlag != 0 {
-			log.Printf("exit sign=%d", r.exitFlag)
+			logger.Errorf("exit sign=%d", r.exitFlag)
 			return
 		}
 
@@ -295,27 +296,47 @@ func (r *redoAction) redo() {
 
 	err, arrFailLine, failLineNum := r.diff(r.succFile, r.failFile)
 	if err != nil {
-		log.Printf("diff err=%s\n", err)
+		logger.Errorf("diff err=%s\n", err)
 		return
 	}
 
 	for _, failLine := range arrFailLine {
 		// 执行
 		err, statMachine := r.load(failLine)
-		if err != nil { // 错误不反悔
-			log.Printf("err=%s failLine=%s\n", err, failLine)
+		if err != nil {
+			logger.Warnf("err=%s failLine=%s\n", err, failLine)
 			_, err = r.succFile.WriteString(failLine + "\n")
 			if err != nil {
-				log.Printf("WriteString=%s redo\n", failLine)
+				logger.Warnf("WriteString=%s redo\n", failLine)
 			}
 		}
 
+		machineValue := reflect.ValueOf(statMachine).FieldByName("StatCode")
+		oldStatCode := machineValue.Int()
+
 		err = statMachine.Run()
 		if err != nil { // 错误不反悔
-			log.Printf("RunErr=%s failLine=%s\n", err, failLine)
+			logger.Warnf("RunErr=%s failLine=%s\n", err, failLine)
 
 			// 查看状态码是否改变了
 			// 改变则原先执行成功塞入succlog原先的成功，塞入faillog新的失败
+			machineValue := reflect.ValueOf(statMachine).FieldByName("StatCode")
+			newStatCode := machineValue.Int()
+			if oldStatCode != newStatCode {
+				_, err = r.succFile.WriteString(failLine + "\n")
+				if err != nil {
+					logger.Warnf("WriteString=%s redo\n", failLine)
+				}
+
+				err, strDumpData := r.dump(statMachine)
+				if err != nil {
+					logger.Warnf("dump=%s redo\n", strDumpData)
+				}
+				_, err = r.failFile.WriteString(strDumpData)
+				if err != nil {
+					logger.Warnf("WriteString=%s redo\n", strDumpData)
+				}
+			}
 
 			continue
 		}
@@ -323,14 +344,14 @@ func (r *redoAction) redo() {
 		// 执行成功
 		_, err = r.succFile.WriteString(failLine + "\n")
 		if err != nil {
-			log.Printf("WriteString=%s redo\n", failLine)
+			logger.Warnf("WriteString=%s redo\n", failLine)
 		}
 
 	}
 
 	// 查看失败行数是否超过了限制，等失败的重试成功之后再执行
 	if failLineNum > r.conf.LineLimit {
-		log.Printf("fail line full")
+		logger.Errorf("fail line full")
 		r.exitFlag = r.exitFlag ^ ExitLogFull
 		return
 	}

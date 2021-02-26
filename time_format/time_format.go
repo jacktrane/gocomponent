@@ -39,3 +39,8 @@ func GetParseTime(formatStr, date string) (error, *time.Time) {
 	lTime, err := time.ParseInLocation(formatStr, date, time.Local)
 	return err, &lTime
 }
+
+func GetNowTime() *time.Time {
+	tTime := time.Now()
+	return &tTime
+}

@@ -1,6 +1,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -29,9 +30,18 @@ var a A = A{
 	C: "ssss",
 }
 
+func (a A) Run() error {
+	fmt.Println(111111)
+	return nil
+}
+
+type I interface {
+	Run() error
+}
+
 func Test_Struct(t *testing.T) {
 	machineValue := reflect.ValueOf(a)
-	var b H
+	var b = H{D: 10}
 	br := reflect.ValueOf(b)
 
 	fmt.Println(machineValue.FieldByName("D").IsValid())
@@ -39,4 +49,22 @@ func Test_Struct(t *testing.T) {
 	fmt.Println(br.FieldByName("D").IsZero())
 	fmt.Println(br.FieldByName("D").Type().Name() == "string")
 	fmt.Println(br.FieldByName("D").Type().Name() == "int")
+	fmt.Println(br.FieldByName("D").Interface().(int))
+	fmt.Println(br.FieldByName("D").Int())
+}
+
+func Test_Inte(t *testing.T) {
+	var ta = A{B: 2,
+		C: "ssss"}
+	inte(ta)
+}
+
+func inte(i I) {
+	byteJson, err := json.Marshal(i)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(byteJson))
+
 }

@@ -1,6 +1,7 @@
 package format
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 )
@@ -64,4 +65,13 @@ func ToArray(v interface{}) []interface{} {
 	default:
 		return nil
 	}
+}
+
+func JSONToMap(v string) map[string]interface{} {
+	mapResult := make(map[string]interface{})
+	err := json.Unmarshal([]byte(v), &mapResult)
+	if err != nil {
+		fmt.Println("JSONToMap err: ", err)
+	}
+	return mapResult
 }
