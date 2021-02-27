@@ -5,7 +5,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jacktrane/gocomponent/file_util"
@@ -41,7 +43,6 @@ type LogFile struct {
 var gLogFile LogFile
 
 func init() {
-	// NewConfig(path.Join("..", "runtime", "log", "default.log"), 5)
 	NewConfig("", 5)
 }
 
@@ -51,6 +52,7 @@ func NewConfig(logFolder string, level int) {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	if logFolder != "" {
 		log.SetOutput(io.MultiWriter(os.Stderr, gLogFile))
+		createFile(gLogFile.fileName, gLogFile.fileFd) // 在初始化时先加个fd先
 	}
 }
 
@@ -59,10 +61,7 @@ func SetLevel(level int) {
 }
 
 func Debugf(format string, args ...interface{}) {
-	if gLogFile.level >= DebugLevel {
-		log.SetPrefix("[Debug] ")
-		log.Output(2, fmt.Sprintf(format, args...))
-	}
+	Debug(fmt.Sprintf(format, args...))
 }
 
 func Debug(v ...interface{}) {
@@ -73,10 +72,7 @@ func Debug(v ...interface{}) {
 }
 
 func Infof(format string, args ...interface{}) {
-	if gLogFile.level >= InfoLevel {
-		log.SetPrefix("[Info] ")
-		log.Output(2, fmt.Sprintf(format, args...))
-	}
+	Info(fmt.Sprintf(format, args...))
 }
 
 func Info(v ...interface{}) {
@@ -87,18 +83,20 @@ func Info(v ...interface{}) {
 }
 
 func Warnf(format string, args ...interface{}) {
+	Warn(fmt.Sprintf(format, args...))
+}
+
+func Warn(v ...interface{}) {
 	if gLogFile.level >= WarnLevel {
 		log.SetPrefix("[Warn] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		log.Output(2, fmt.Sprint(v...))
 	}
 }
 
 func Errorf(format string, args ...interface{}) {
-	if gLogFile.level >= ErrorLevel {
-		log.SetPrefix("[Error] ")
-		log.Output(2, fmt.Sprintf(format, args...))
-	}
+	Error(fmt.Sprintf(format, args...))
 }
+
 func Error(v ...interface{}) {
 	if gLogFile.level >= ErrorLevel {
 		log.SetPrefix("[Error] ")
@@ -107,16 +105,26 @@ func Error(v ...interface{}) {
 }
 
 func Fatalf(format string, args ...interface{}) {
-	if gLogFile.level >= FatalLevel {
-		log.SetPrefix("[Fatal] ")
-		log.Output(2, fmt.Sprintf(format, args...))
-	}
+	Fatal(fmt.Sprintf(format, args...))
 }
 
 func Fatal(v ...interface{}) {
 	if gLogFile.level >= FatalLevel {
-		log.SetPrefix("[Error] ")
+		log.SetPrefix("[Fatal] ")
 		log.Output(2, fmt.Sprint(v...))
+		debug.PrintStack()
+		os.Exit(1)
+	}
+}
+
+func Panicf(format string, args ...interface{}) {
+	Panic(fmt.Sprintf(format, args...))
+}
+
+func Panic(v ...interface{}) {
+	if gLogFile.level >= FatalLevel {
+		log.SetPrefix("[Panic] ")
+		log.Panic(fmt.Sprint(v...))
 	}
 }
 
@@ -139,9 +147,7 @@ func (me LogFile) Write(buf []byte) (n int, err error) {
 }
 
 func (me *LogFile) createLogFile() {
-	// logdir := "./"
 	if index := strings.LastIndex(me.fileName, "/"); index != -1 {
-		// logdir = me.fileName[0:index] + "/"
 		os.MkdirAll(me.fileName[0:index], os.ModePerm)
 	}
 
@@ -169,14 +175,22 @@ func (me *LogFile) createLogFile() {
 		}
 	}
 
+	createFile(me.fileName, me.fileFd)
+}
+
+func createFile(fileName string, fileFd *os.File) {
 	for index := 0; index < 10; index++ {
-		if fd, err := os.OpenFile(me.fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm); nil == err {
-			me.fileFd.Sync()
-			me.fileFd.Close()
-			me.fileFd = fd
+		if fd, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm); nil == err {
+			fileFd.Sync()
+			fileFd.Close()
+			fileFd = fd
+
+			// 下面是为了重定向标准输出到文件中，因为painc，Dup2仅能在linux运行哦，所以如果在window下注释
+			syscall.Dup2(int(fileFd.Fd()), int(os.Stdout.Fd()))
+			syscall.Dup2(int(fileFd.Fd()), int(os.Stderr.Fd()))
 			break
 		}
 
-		me.fileFd = nil
+		fileFd = nil
 	}
 }

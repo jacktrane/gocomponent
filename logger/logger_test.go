@@ -7,16 +7,10 @@ import (
 )
 
 func TestLog(t *testing.T) {
-	// Fatalf("222222")
 	// NewConfig(path.Join("..", "runtime", "log", "default.log"), 5)
-	Infof("info1234567")
-	// Errorf("error1234567")
+	Fatal("panic1234567")
 	// Debugf("debug1234567")
 	time.Sleep(time.Second)
-	// log.Fatal("111111")
-	// for {
-
-	// }
 }
 
 func TestByte(t *testing.T) {
