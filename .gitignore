@@ -1,3 +1,5 @@
 .vscode/launch.json
 .vscode/settings.json
 runtime/*
+#logger因为win和linux不兼容，本地修改暂时不放到git上
+logger/logger.go
