@@ -61,7 +61,10 @@ func SetLevel(level int) {
 }
 
 func Debugf(format string, args ...interface{}) {
-	Debug(fmt.Sprintf(format, args...))
+	if gLogFile.level >= DebugLevel {
+		log.SetPrefix("[Debug] ")
+		log.Output(2, fmt.Sprintf(format, args...))
+	}
 }
 
 func Debug(v ...interface{}) {
@@ -72,7 +75,10 @@ func Debug(v ...interface{}) {
 }
 
 func Infof(format string, args ...interface{}) {
-	Info(fmt.Sprintf(format, args...))
+	if gLogFile.level >= DebugLevel {
+		log.SetPrefix("[Info] ")
+		log.Output(2, fmt.Sprintf(format, args...))
+	}
 }
 
 func Info(v ...interface{}) {
@@ -83,7 +89,10 @@ func Info(v ...interface{}) {
 }
 
 func Warnf(format string, args ...interface{}) {
-	Warn(fmt.Sprintf(format, args...))
+	if gLogFile.level >= DebugLevel {
+		log.SetPrefix("[Warn] ")
+		log.Output(2, fmt.Sprintf(format, args...))
+	}
 }
 
 func Warn(v ...interface{}) {
@@ -94,7 +103,10 @@ func Warn(v ...interface{}) {
 }
 
 func Errorf(format string, args ...interface{}) {
-	Error(fmt.Sprintf(format, args...))
+	if gLogFile.level >= DebugLevel {
+		log.SetPrefix("[Error] ")
+		log.Output(2, fmt.Sprintf(format, args...))
+	}
 }
 
 func Error(v ...interface{}) {
@@ -105,7 +117,12 @@ func Error(v ...interface{}) {
 }
 
 func Fatalf(format string, args ...interface{}) {
-	Fatal(fmt.Sprintf(format, args...))
+	if gLogFile.level >= FatalLevel {
+		log.SetPrefix("[Fatal] ")
+		log.Output(2, fmt.Sprintf(format, args...))
+		debug.PrintStack()
+		os.Exit(1)
+	}
 }
 
 func Fatal(v ...interface{}) {
@@ -118,7 +135,10 @@ func Fatal(v ...interface{}) {
 }
 
 func Panicf(format string, args ...interface{}) {
-	Panic(fmt.Sprintf(format, args...))
+	if gLogFile.level >= FatalLevel {
+		log.SetPrefix("[Panic] ")
+		log.Panic(fmt.Sprintf(format, args...))
+	}
 }
 
 func Panic(v ...interface{}) {
