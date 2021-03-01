@@ -12,32 +12,24 @@ import (
 	"time"
 
 	"github.com/jacktrane/gocomponent/logger"
-
 	"github.com/jacktrane/gocomponent/time_format"
 )
 
 type StatMachine interface {
-	Run() error // 执行
-	// Dump() []byte            // 执行失败时将数据dump下来
-	// Load(paras []byte) error // 重新load数据执行
+	Run() (bool, error) // 执行 bool代表是否状态改变， error代表有错误需要执行
 }
 
 type RedoConfig struct {
 	RedoFileNameWithPath string // 重试文件所处目录
-	SliceFileInterval    int    // 多久切割文件，s为单位
+	SliceFileInterval    int    // 多久切割文件， 仅允许 time_format.OneDay | time_format.OneHour
 	HoldFileNum          int    // 最大文件数量
-	FileFormat           string // 文件格式
 	LineLimit            int    // 文件最大行数
 	PollInterval         int    // 轮询间隔
 	PollRateLimit        int    // 轮询速度
 	Machine              StatMachine
 }
 
-func (r RedoConfig) defaultParam() {
-	// TODO 不填则放置在内存中，但这里有个问题，会不会把内存打爆了？
-	// if r.RedoFileNameWithPath == "" {
-	// 	r.RedoFileNameWithPath = "../logger/data"
-	// }
+func (r *RedoConfig) defaultParam() {
 	if r.SliceFileInterval == 0 {
 		r.SliceFileInterval = time_format.OneDay
 	}
@@ -74,11 +66,13 @@ const (
 )
 
 func NewRedoActionConf(conf RedoConfig) *redoAction {
-	conf.defaultParam()
-
 	ra := redoAction{
-		conf: conf,
+		conf:          conf,
+		locker:        &sync.RWMutex{},
+		setMachineOne: &sync.Once{},
+		fileSliceOne:  &sync.Once{},
 	}
+	ra.conf.defaultParam()
 
 	// 保证machine一定有并且需要具备指定的状态码
 	if conf.Machine == nil {
@@ -86,13 +80,30 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 	}
 
 	// 强行要加一个状态码
-	machineValue := reflect.ValueOf(conf.Machine).FieldByName("StatCode")
-	if !machineValue.IsValid() {
-		logger.Fatal("machine 不存在 StatCode 字段")
+	// machineReflect := reflect.ValueOf(conf.Machine)
+	// if machineReflect.Elem().Kind() != reflect.Struct {
+	// 	logger.Panic("machine 不是一个结构体")
+	// }
+	// statCodeField := machineReflect.Elem().FieldByName("StatCode")
+	// if !statCodeField.IsValid() {
+	// 	logger.Fatal("machine 不存在 StatCode 字段")
+	// }
+	// if statCodeField.Type().Name() != "int" {
+	// 	logger.Fatal("machine中StatCode字段类型不为int")
+	// }
+
+	if ra.conf.SliceFileInterval != time_format.OneDay && ra.conf.SliceFileInterval != time_format.OneHour {
+		logger.Fatalf("conf中的SliceFileInterval仅允许传%d或%d", time_format.OneDay, time_format.OneHour)
 	}
-	if machineValue.Type().Name() != "int" {
-		logger.Fatal("machine中StatCode字段类型不为int")
-	}
+
+	// // 限制结构体不允许有json的tag
+	// machineReflectType := machineReflect.Type()
+	// fieldNum := machineReflect.NumField()
+	// for index := 0; index < fieldNum; index++ {
+	// 	if _, existed := machineReflectType.Field(index).Tag.Lookup("json"); existed {
+	// 		logger.Fatalf("字段名：%s 不允许加json tag", machineReflectType.Field(index).Name)
+	// 	}
+	// }
 
 	// 切割文件目前支持最低的切割粒度是小时级别
 	ra.logDateFormat = time_format.FullFormatDateSimpleDay
@@ -109,12 +120,11 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 
 // 保证稳定执行
 func (r *redoAction) StableAction(machine StatMachine) {
-	err := machine.Run()
-	if err != nil { // 错误不反悔
-		logger.Warnf("RunErr=%s failLine=%s\n", err, machine)
-		err, strDumpData := r.dump(machine)
-		if err != nil {
-			logger.Warnf("dump=%s redo\n", strDumpData)
+	if _, err := machine.Run(); err != nil {
+		errDump, strDumpData := r.dump(machine)
+		logger.Warnf("runErr=%s failLine=%s redo", err, strDumpData)
+		if errDump != nil {
+			logger.Warnf("err=%s dump=%s redo", errDump, strDumpData)
 		}
 		_, err = r.failFile.WriteString(strDumpData)
 		if err != nil {
@@ -144,8 +154,12 @@ func (r *redoAction) initFile() error {
 		return err
 	}
 
-	// 获取上一天的日志信息，把还没有状态机的重试的进行重试
+	// 获取上一个时间段的日志信息，把还没有状态机的重试的进行重试
 	d, _ := time.ParseDuration("-24h")
+	if r.conf.SliceFileInterval == time_format.OneHour {
+		d, _ = time.ParseDuration("-1h")
+	}
+
 	beforeDate := now.Add(d).Format(r.logDateFormat)
 	err, beforeSuccFile, beforeFailFile := r.getLogFile(beforeDate)
 	if err != nil {
@@ -227,17 +241,12 @@ func (r *redoAction) formatLogFile(bSuccFile bool, dateStr string) (error, *os.F
 		status = "succ"
 	}
 
-	fileName := fmt.Sprintf("%s_%s_%s.log", r.conf.RedoFileNameWithPath, r.nowDate, status)
+	fileName := fmt.Sprintf("%s_%s_%s.log", r.conf.RedoFileNameWithPath, dateStr, status)
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err, nil
 	}
 	logger.Infof("fileName=%s succOpen", fileName)
-	// if bSuccFile {
-	// 	r.succFile = file
-	// } else {
-	// 	r.failFile = file
-	// }
 	return nil, file
 }
 
@@ -247,7 +256,7 @@ func (r *redoAction) getLogFile(dateStr string) (error, *os.File, *os.File) {
 		return err, nil, nil
 	}
 
-	err, succFile := r.formatLogFile(false, dateStr)
+	err, succFile := r.formatLogFile(true, dateStr)
 	if err != nil {
 		failFile.Close()
 		return err, nil, nil
@@ -300,29 +309,24 @@ func (r *redoAction) redo() {
 		return
 	}
 
+	// TODO 这里可以做一下限流，防止挂掉
 	for _, failLine := range arrFailLine {
 		// 执行
 		err, statMachine := r.load(failLine)
 		if err != nil {
-			logger.Warnf("err=%s failLine=%s\n", err, failLine)
+			logger.Errorf("致命错误，但不能阻碍重试 err=%s failLine=%s\n", err, failLine)
 			_, err = r.succFile.WriteString(failLine + "\n")
 			if err != nil {
 				logger.Warnf("WriteString=%s redo\n", failLine)
 			}
+			continue
 		}
 
-		machineValue := reflect.ValueOf(statMachine).FieldByName("StatCode")
-		oldStatCode := machineValue.Int()
-
-		err = statMachine.Run()
-		if err != nil { // 错误不反悔
+		statChange, err := statMachine.Run()
+		if err != nil { // 错误不返回
 			logger.Warnf("RunErr=%s failLine=%s\n", err, failLine)
 
-			// 查看状态码是否改变了
-			// 改变则原先执行成功塞入succlog原先的成功，塞入faillog新的失败
-			machineValue := reflect.ValueOf(statMachine).FieldByName("StatCode")
-			newStatCode := machineValue.Int()
-			if oldStatCode != newStatCode {
+			if statChange {
 				_, err = r.succFile.WriteString(failLine + "\n")
 				if err != nil {
 					logger.Warnf("WriteString=%s redo\n", failLine)
@@ -351,7 +355,7 @@ func (r *redoAction) redo() {
 
 	// 查看失败行数是否超过了限制，等失败的重试成功之后再执行
 	if failLineNum > r.conf.LineLimit {
-		logger.Errorf("fail line full")
+		logger.Errorf("fail line full，failLineNum=%d confLineLimit=%d", failLineNum, r.conf.LineLimit)
 		r.exitFlag = r.exitFlag ^ ExitLogFull
 		return
 	}
@@ -383,7 +387,18 @@ func (r *redoAction) load(para string) (error, StatMachine) {
 	para = strings.Replace(para, "\\\n", "\n", -1)
 	para = strings.Replace(para, "\\\\", "\\", -1)
 
-	tmpMachine := r.conf.Machine
-	err := json.Unmarshal([]byte(para), &tmpMachine)
-	return err, tmpMachine
+	// machineT := reflect.ValueOf(r.conf.Machine).Type()
+	// machineReflect := reflect.New(machineT)
+	// err := json.Unmarshal([]byte(para), machineReflect.Interface())
+	// if err != nil {
+	// 	return err, nil
+	// }
+	// return nil, machineReflect.Interface().(StatMachine)
+	p := reflect.ValueOf(r.conf.Machine).Elem()
+	p.Set(reflect.Zero(p.Type()))
+	err := json.Unmarshal([]byte(para), r.conf.Machine)
+	if err != nil {
+		return err, nil
+	}
+	return nil, r.conf.Machine
 }
