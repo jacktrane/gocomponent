@@ -4,7 +4,6 @@ import (
 	"errors"
 	"path"
 	"testing"
-	"time"
 
 	"github.com/jacktrane/gocomponent/logger"
 )
@@ -13,10 +12,6 @@ type TestMachine struct {
 	StatCode int `jso1n:"statcode"`
 	Num      int
 	Str      string
-}
-
-type TestB struct {
-	Test string
 }
 
 const (
@@ -63,6 +58,4 @@ func TestRedo(t *testing.T) {
 
 	var testMachine TestMachine
 	redo.StableAction(&testMachine)
-
-	time.Sleep(time.Second * 10)
 }
