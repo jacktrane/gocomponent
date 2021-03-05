@@ -5,11 +5,13 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/jacktrane/gocomponent/basic"
 	"github.com/jacktrane/gocomponent/file_util"
 	"github.com/jacktrane/gocomponent/time_format"
 )
@@ -63,63 +65,64 @@ func SetLevel(level int) {
 func Debugf(format string, args ...interface{}) {
 	if gLogFile.level >= DebugLevel {
 		log.SetPrefix("[Debug] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		// output(fmt.Sprintf(format, args...))
+		output(fmt.Sprintf(format, args...))
 	}
 }
 
 func Debug(v ...interface{}) {
 	if gLogFile.level >= DebugLevel {
 		log.SetPrefix("[Debug] ")
-		log.Output(2, fmt.Sprint(v...))
+		output(fmt.Sprint(v...))
 	}
 }
 
 func Infof(format string, args ...interface{}) {
 	if gLogFile.level >= DebugLevel {
 		log.SetPrefix("[Info] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		output(fmt.Sprintf(format, args...))
 	}
 }
 
 func Info(v ...interface{}) {
 	if gLogFile.level >= InfoLevel {
 		log.SetPrefix("[Info] ")
-		log.Output(2, fmt.Sprint(v...))
+		output(fmt.Sprint(v...))
 	}
 }
 
 func Warnf(format string, args ...interface{}) {
 	if gLogFile.level >= DebugLevel {
 		log.SetPrefix("[Warn] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		output(fmt.Sprintf(format, args...))
 	}
 }
 
 func Warn(v ...interface{}) {
 	if gLogFile.level >= WarnLevel {
 		log.SetPrefix("[Warn] ")
-		log.Output(2, fmt.Sprint(v...))
+		output(fmt.Sprint(v...))
 	}
 }
 
 func Errorf(format string, args ...interface{}) {
 	if gLogFile.level >= DebugLevel {
 		log.SetPrefix("[Error] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		output(fmt.Sprintf(format, args...))
 	}
 }
 
 func Error(v ...interface{}) {
 	if gLogFile.level >= ErrorLevel {
 		log.SetPrefix("[Error] ")
-		log.Output(2, fmt.Sprint(v...))
+		output(fmt.Sprint(v...))
 	}
 }
 
 func Fatalf(format string, args ...interface{}) {
 	if gLogFile.level >= FatalLevel {
 		log.SetPrefix("[Fatal] ")
-		log.Output(2, fmt.Sprintf(format, args...))
+		output(fmt.Sprintf(format, args...))
 		debug.PrintStack()
 		os.Exit(1)
 	}
@@ -128,23 +131,36 @@ func Fatalf(format string, args ...interface{}) {
 func Fatal(v ...interface{}) {
 	if gLogFile.level >= FatalLevel {
 		log.SetPrefix("[Fatal] ")
-		log.Output(2, fmt.Sprint(v...))
+		output(fmt.Sprint(v...))
 		debug.PrintStack()
 		os.Exit(1)
 	}
 }
 
+func output(v ...interface{}) {
+	log.Output(3, "["+formatFuncPrefix()+"] "+fmt.Sprint(v...))
+}
+
+func formatFuncPrefix() string {
+	funcName, _, _, _ := runtime.Caller(3)
+	funcNameFullPatch := strings.Split(runtime.FuncForPC(funcName).Name(), "/")
+	funcNameLen := len(funcNameFullPatch)
+	funcPrefixWithPackage := basic.IfElseStr(funcNameLen >= 1, funcNameFullPatch[funcNameLen-1], "")
+	funcPrefix := funcPrefixWithPackage[strings.Index(funcPrefixWithPackage, ".")+1:]
+	return funcPrefix
+}
+
 func Panicf(format string, args ...interface{}) {
 	if gLogFile.level >= FatalLevel {
 		log.SetPrefix("[Panic] ")
-		log.Panic(fmt.Sprintf(format, args...))
+		log.Panic("[" + formatFuncPrefix() + "] " + fmt.Sprintf(format, args...))
 	}
 }
 
 func Panic(v ...interface{}) {
 	if gLogFile.level >= FatalLevel {
 		log.SetPrefix("[Panic] ")
-		log.Panic(fmt.Sprint(v...))
+		log.Panic("[" + formatFuncPrefix() + "] " + fmt.Sprint(v...))
 	}
 }
 
@@ -162,7 +178,7 @@ func (me LogFile) Write(buf []byte) (n int, err error) {
 	if gLogFile.fileFd == nil {
 		return len(buf), nil
 	}
-
+	// TODO 这里得起个单例来删除废log
 	return gLogFile.fileFd.Write(buf)
 }
 

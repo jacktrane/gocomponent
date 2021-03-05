@@ -1,7 +1,8 @@
-### 既然这样了，就写个包吧
-### 一、redo
-> 重试机，用于保障系统高可用
+# 既然这样了，就写个包吧
 
+## 一、redo
+
+> 重试机，用于保障系统高可用
 
 ``` go
 用例：
@@ -18,6 +19,8 @@
         MachineStatCodeTest4
     )
 
+    // 返回值： bool 状态/数据是否改变 error 是否有错误
+    // 重试机只有在error出现时才会重试
     func (t *TestMachine) Run() (bool, error) {
         statCode := t.StatCode
         for {
@@ -58,5 +61,6 @@
     }
 ```
 
-### 二、logger
-用例：参考 logger/logger_test.go
+## 二、logger
+
+用例：参考 `logger/logger_test.go`
