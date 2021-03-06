@@ -2,29 +2,21 @@ package logger
 
 import (
 	"fmt"
+	"path"
 	"testing"
-	"time"
 )
 
 func TestLog(t *testing.T) {
-	// NewConfig(path.Join("..", "runtime", "log", "default.log"), 5)
+	NewConfig(path.Join("..", "runtime", "log", "default.log"), 5)
 	// Fatal("panic1234567")
-	Debugf("debug1234567")
-	go func() {
-		Debugf("1debug1234567")
-		go func() {
-			Debugf("2debug1234567")
-			go func() {
-				Debugf("3debug1234567")
-			}()
-			Fatal("debug1234567")
-
-			go Log1()
-		}()
-	}()
-
+	// for i := 0; i < 100000; i++ {
+	Debug("debug")
+	Infof("1111111")
+	Error("1111111")
+	Infof("1111111")
+	// }
+	panic(11111)
 	// go Log1()
-	time.Sleep(time.Second)
 }
 
 func Log1() {

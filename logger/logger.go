@@ -53,8 +53,8 @@ func NewConfig(logFolder string, level int) {
 	gLogFile.level = level
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	if logFolder != "" {
-		log.SetOutput(io.MultiWriter(os.Stderr, gLogFile))
-		createFile(gLogFile.fileName, gLogFile.fileFd) // 在初始化时先加个fd先
+		log.SetOutput(io.MultiWriter(os.Stdout, gLogFile))
+		gLogFile.fileFd = createFile(gLogFile.fileName) // 在初始化时先加个fd先
 	}
 }
 
@@ -176,6 +176,7 @@ func (me LogFile) Write(buf []byte) (n int, err error) {
 	}
 
 	if gLogFile.fileFd == nil {
+		fmt.Println(gLogFile)
 		return len(buf), nil
 	}
 	// TODO 这里得起个单例来删除废log
@@ -211,10 +212,11 @@ func (me *LogFile) createLogFile() {
 		}
 	}
 
-	createFile(me.fileName, me.fileFd)
+	me.fileFd = createFile(me.fileName)
 }
 
-func createFile(fileName string, fileFd *os.File) {
+func createFile(fileName string) *os.File {
+	var fileFd *os.File
 	for index := 0; index < 10; index++ {
 		if fd, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm); nil == err {
 			fileFd.Sync()
@@ -222,11 +224,11 @@ func createFile(fileName string, fileFd *os.File) {
 			fileFd = fd
 
 			// 下面是为了重定向标准输出到文件中，因为painc，Dup2仅能在linux运行哦，所以如果在window下注释
-			syscall.Dup2(int(fileFd.Fd()), int(os.Stdout.Fd()))
 			syscall.Dup2(int(fileFd.Fd()), int(os.Stderr.Fd()))
 			break
 		}
 
 		fileFd = nil
 	}
+	return fileFd
 }
