@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"testing"
+	"time"
 )
 
 func TestLog(t *testing.T) {
@@ -15,8 +16,8 @@ func TestLog(t *testing.T) {
 	Error("1111111")
 	Infof("1111111")
 	// }
-	panic(11111)
 	// go Log1()
+	time.Sleep(10 * time.Second)
 }
 
 func Log1() {
@@ -30,4 +31,23 @@ func TestByte(t *testing.T) {
 	fmt.Println(string(arrByte), "\n", string(arrByte1))
 	arrByte2 := []byte{58, 32}
 	fmt.Println(string(arrByte2))
+}
+
+func TestCreateLog(t *testing.T) {
+	// fmt.Println(path.Join("..", "runtime", "log", fmt.Sprintf("default.log")))
+	// a := path.Join("..", "runtime", "log", fmt.Sprintf("default.log"))
+	// if i := strings.LastIndex(a, "."); i > -1 {
+	// 	fmt.Println(a[:i])
+	// }
+	// arr := make([]string, 0, 60)
+	// for i := 0; i < 30; i++ {
+	// 	arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("default_202103%.2d.log", i)))
+	// }
+	// for i := 0; i < 30; i++ {
+	// 	arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("default_202104%.2d.log", i)))
+	// }
+
+	// for _, v := range arr {
+	// 	os.OpenFile(v, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
+	// }
 }

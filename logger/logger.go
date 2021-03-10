@@ -3,11 +3,15 @@ package logger
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -36,10 +40,12 @@ var printLevelArr = map[int]string{
 }
 
 type LogFile struct {
-	level    int
-	logTime  int64
-	fileName string
-	fileFd   *os.File
+	level        int
+	logTime      int64
+	fileName     string
+	fileFd       *os.File
+	holdLogSum   int
+	clearLogOnce *sync.Once
 }
 
 var gLogFile LogFile
@@ -51,15 +57,24 @@ func init() {
 func NewConfig(logFolder string, level int) {
 	gLogFile.fileName = logFolder
 	gLogFile.level = level
+	gLogFile.holdLogSum = 2
+	gLogFile.clearLogOnce = &sync.Once{}
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	if logFolder != "" {
 		log.SetOutput(io.MultiWriter(os.Stdout, gLogFile))
 		gLogFile.fileFd = createFile(gLogFile.fileName) // 在初始化时先加个fd先
+		gLogFile.clearLogOnce.Do(func() {
+			gLogFile.clearLog()
+		})
 	}
 }
 
 func SetLevel(level int) {
 	gLogFile.level = level
+}
+
+func SetHoldLogSum(holdLogSum int) {
+	gLogFile.holdLogSum = holdLogSum
 }
 
 func Debugf(format string, args ...interface{}) {
@@ -164,8 +179,8 @@ func Panic(v ...interface{}) {
 	}
 }
 
-func (me LogFile) Write(buf []byte) (n int, err error) {
-	if me.fileName == "" {
+func (lf LogFile) Write(buf []byte) (n int, err error) {
+	if lf.fileName == "" {
 		fmt.Printf("consol: %s", buf)
 		return len(buf), nil
 	}
@@ -179,29 +194,25 @@ func (me LogFile) Write(buf []byte) (n int, err error) {
 		fmt.Println(gLogFile)
 		return len(buf), nil
 	}
-	// TODO 这里得起个单例来删除废log
 
 	return gLogFile.fileFd.Write(buf)
 }
 
-func (me *LogFile) createLogFile() {
-	if index := strings.LastIndex(me.fileName, "/"); index != -1 {
-		os.MkdirAll(me.fileName[0:index], os.ModePerm)
+func (lf *LogFile) createLogFile() {
+	if index := strings.LastIndex(lf.fileName, "/"); index != -1 {
+		os.MkdirAll(lf.fileName[0:index], os.ModePerm)
 	}
 
 	now := time_format.GetNowTime()
-	err, fileModTime := file_util.GetFileModTime(me.fileName)
+	err, fileModTime := file_util.GetFileModTime(lf.fileName)
 	if err != nil {
-		fmt.Println(err, me.fileName)
+		fmt.Println(err, lf.fileName)
 	}
 
 	if err != nil || now.Format(time_format.FullFormatDateSimpleDay) != fileModTime.Format(time_format.FullFormatDateSimpleDay) {
-		fmt.Println("log")
-		d, _ := time.ParseDuration("-24h")
-		beforeDay := now.Add(d)
-		filename := fmt.Sprintf("%s_%s.log", me.fileName, beforeDay.Format(time_format.FullFormatDateSimpleDay))
+		filename := fmt.Sprintf("%s_%s.log", lf.fileName[:strings.LastIndex(lf.fileName, ".")], fileModTime.Format(time_format.FullFormatDateSimpleDay))
 		if !file_util.IsExist(filename) {
-			if err := os.Rename(me.fileName, filename); err == nil {
+			if err := os.Rename(lf.fileName, filename); err == nil {
 				// go func() {
 				// 	tarCmd := exec.Command("tar", "-zcf", filename+".tar.gz", filename, "--remove-files")
 				// 	tarCmd.Run()
@@ -213,7 +224,7 @@ func (me *LogFile) createLogFile() {
 		}
 	}
 
-	me.fileFd = createFile(me.fileName)
+	lf.fileFd = createFile(lf.fileName)
 }
 
 func createFile(fileName string) *os.File {
@@ -231,5 +242,33 @@ func createFile(fileName string) *os.File {
 
 		fileFd = nil
 	}
+
 	return fileFd
+}
+
+func (lf LogFile) clearLog() {
+	fileDir := path.Dir(lf.fileName)
+	for {
+		files, _ := ioutil.ReadDir(fileDir)
+		if fileLen := len(files); fileLen > lf.holdLogSum {
+			sort.SliceStable(files, func(i, j int) bool {
+				return files[i].Name() < files[j].Name()
+			})
+			nDelNum := fileLen - lf.holdLogSum
+			delNum := 0
+			for _, f := range files {
+				if f.Name() == path.Base(lf.fileName) {
+					continue
+				}
+				if delNum >= nDelNum {
+					break
+				}
+
+				os.Remove(fileDir + "/" + f.Name())
+				delNum++
+			}
+		}
+
+		time.Sleep(1 * time.Minute)
+	}
 }
