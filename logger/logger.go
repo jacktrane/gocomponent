@@ -180,6 +180,7 @@ func (me LogFile) Write(buf []byte) (n int, err error) {
 		return len(buf), nil
 	}
 	// TODO 这里得起个单例来删除废log
+
 	return gLogFile.fileFd.Write(buf)
 }
 
