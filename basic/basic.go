@@ -1,5 +1,7 @@
 package basic
 
+import "encoding/json"
+
 func IfElseStr(cond bool, a, b string) string {
 	if cond {
 		return a
@@ -26,4 +28,9 @@ func IfElseInt32(cond bool, a, b int32) int32 {
 		return a
 	}
 	return b
+}
+
+func FormatJsonStr(v interface{}) string {
+	btJson, _ := json.Marshal(v)
+	return string(btJson)
 }

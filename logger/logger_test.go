@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -39,15 +40,12 @@ func TestCreateLog(t *testing.T) {
 	// if i := strings.LastIndex(a, "."); i > -1 {
 	// 	fmt.Println(a[:i])
 	// }
-	// arr := make([]string, 0, 60)
-	// for i := 0; i < 30; i++ {
-	// 	arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("default_202103%.2d.log", i)))
-	// }
-	// for i := 0; i < 30; i++ {
-	// 	arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("default_202104%.2d.log", i)))
-	// }
-
-	// for _, v := range arr {
-	// 	os.OpenFile(v, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
-	// }
+	arr := make([]string, 0, 60)
+	for i := 0; i < 30; i++ {
+		arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("redo.log_succ_202103%.2d_%.2d.log", i, 30-i+1)))
+		arr = append(arr, path.Join("..", "runtime", "log", fmt.Sprintf("redo.log_fail_202103%.2d_%.2d.log", i, 30-i+1)))
+	}
+	for _, v := range arr {
+		os.OpenFile(v, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
+	}
 }

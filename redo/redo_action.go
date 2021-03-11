@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -241,7 +242,7 @@ func (r *redoAction) formatLogFile(bSuccFile bool, dateStr string) (error, *os.F
 		status = "succ"
 	}
 
-	fileName := fmt.Sprintf("%s_%s_%s.log", r.conf.RedoFileNameWithPath, dateStr, status)
+	fileName := fmt.Sprintf("%s_%s_%s.log", r.conf.RedoFileNameWithPath, status, dateStr)
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err, nil
@@ -267,13 +268,55 @@ func (r *redoAction) getLogFile(dateStr string) (error, *os.File, *os.File) {
 
 func (r *redoAction) checkFileSliceCond() {
 	for {
-		// TODO 清除多余日志
+		// 清除多余日志
+		r.clearLog()
+
 		time.Sleep(time.Minute)
 		if r.nowDate != time.Now().Format(r.logDateFormat) {
 			// 抛出个panic让业务去知道吧
 			if err := r.initFile(); err != nil {
 				panic(err)
 			}
+		}
+	}
+}
+
+func (r *redoAction) clearLog() {
+	fileDir := path.Dir(r.conf.RedoFileNameWithPath)
+	files, _ := ioutil.ReadDir(fileDir)
+	sort.SliceStable(files, func(i, j int) bool {
+		return files[i].Name() < files[j].Name()
+	})
+	succFiles, failFiles := make([]string, 0), make([]string, 0)
+	filePrefix := path.Base(r.conf.RedoFileNameWithPath)
+	succSign, failSign := filePrefix+"_succ_", filePrefix+"_fail_"
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), succSign) {
+			succFiles = append(succFiles, f.Name())
+			continue
+		}
+		if strings.HasPrefix(f.Name(), failSign) {
+			failFiles = append(failFiles, f.Name())
+		}
+
+	}
+
+	r.rmFile(succFiles, fileDir)
+	r.rmFile(failFiles, fileDir)
+}
+
+func (r *redoAction) rmFile(files []string, fileDir string) {
+	filesLen := len(files)
+	delNum := 0
+	if filesLen > r.conf.HoldFileNum {
+		nDelNum := filesLen - r.conf.HoldFileNum
+		for _, f := range files {
+			if delNum >= nDelNum {
+				break
+			}
+
+			os.Remove(path.Join(fileDir, f))
+			delNum++
 		}
 	}
 }

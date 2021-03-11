@@ -4,8 +4,10 @@ import (
 	"errors"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/jacktrane/gocomponent/logger"
+	"github.com/jacktrane/gocomponent/time_format"
 )
 
 type TestMachine struct {
@@ -50,7 +52,7 @@ func TestRedo(t *testing.T) {
 	var emptyMachine TestMachine
 	conf := RedoConfig{
 		RedoFileNameWithPath: path.Join(path.Join("..", "runtime", "log", "redo.log")),
-		SliceFileInterval:    3600,
+		SliceFileInterval:    time_format.OneDay,
 		Machine:              &emptyMachine,
 		PollInterval:         1,
 	}
@@ -58,4 +60,5 @@ func TestRedo(t *testing.T) {
 
 	var testMachine TestMachine
 	redo.StableAction(&testMachine)
+	time.Sleep(10 * time.Second)
 }

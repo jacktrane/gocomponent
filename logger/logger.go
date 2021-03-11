@@ -264,7 +264,7 @@ func (lf LogFile) clearLog() {
 					break
 				}
 
-				os.Remove(fileDir + "/" + f.Name())
+				os.Remove(path.Join(fileDir, f.Name()))
 				delNum++
 			}
 		}
