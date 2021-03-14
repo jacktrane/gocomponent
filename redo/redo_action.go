@@ -1,6 +1,7 @@
 package redo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/jacktrane/gocomponent/logger"
 	"github.com/jacktrane/gocomponent/time_format"
@@ -59,6 +62,7 @@ type redoAction struct {
 	fileSliceOne  *sync.Once
 	locker        *sync.RWMutex
 	exitFlag      int
+	limiter       *rate.Limiter
 }
 
 const (
@@ -97,6 +101,7 @@ func NewRedoActionConf(conf RedoConfig) *redoAction {
 		logger.Fatalf("conf中的SliceFileInterval仅允许传%d或%d", time_format.OneDay, time_format.OneHour)
 	}
 
+	ra.limiter = rate.NewLimiter(rate.Limit(ra.conf.PollRateLimit), 1)
 	// // 限制结构体不允许有json的tag
 	// machineReflectType := machineReflect.Type()
 	// fieldNum := machineReflect.NumField()
@@ -352,8 +357,12 @@ func (r *redoAction) redo() {
 		return
 	}
 
-	// TODO 这里可以做一下限流，防止挂掉
+	ctx, _ := context.WithCancel(context.TODO())
 	for _, failLine := range arrFailLine {
+		if err := r.limiter.Wait(ctx); err != nil {
+			logger.Errorf("limit wait error=%s", err)
+		}
+
 		// 执行
 		err, statMachine := r.load(failLine)
 		if err != nil {

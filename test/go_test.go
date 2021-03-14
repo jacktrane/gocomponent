@@ -1,11 +1,15 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
+	"time"
+
+	"golang.org/x/time/rate"
 )
 
 func Test_Mkdir(t *testing.T) {
@@ -67,4 +71,17 @@ func inte(i I) {
 	}
 	fmt.Println(string(byteJson))
 
+}
+
+func TestRate(t *testing.T) {
+	// fmt.Println(11111)
+	// r := rate.Every(5 * time.Second)
+	l := rate.NewLimiter(5, 1)
+	c, _ := context.WithCancel(context.TODO())
+	fmt.Println(l.Limit(), l.Burst())
+	for {
+		l.Wait(c)
+		// time.Sleep(100 * time.Millisecond)
+		fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"))
+	}
 }

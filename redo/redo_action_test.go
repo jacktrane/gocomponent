@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jacktrane/gocomponent/logger"
 	"github.com/jacktrane/gocomponent/time_format"
 )
 
@@ -28,9 +27,9 @@ func (t *TestMachine) Run() (bool, error) {
 	for {
 		switch t.StatCode {
 		case MachineStatCodeTest1:
-			if t.Num < 4 {
+			if t.Num < 100 {
 				t.Num++
-				logger.Errorf("%+v", t)
+				// logger.Errorf("%+v", t)
 				return true, errors.New("errrr") // 数据 是否改变
 			}
 
@@ -55,6 +54,7 @@ func TestRedo(t *testing.T) {
 		SliceFileInterval:    time_format.OneDay,
 		Machine:              &emptyMachine,
 		PollInterval:         1,
+		PollRateLimit:        2,
 	}
 	redo := NewRedoActionConf(conf)
 
