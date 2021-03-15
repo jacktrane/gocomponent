@@ -1,4 +1,4 @@
-package httpreq
+package request
 
 import (
 	"bytes"
