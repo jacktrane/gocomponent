@@ -357,7 +357,8 @@ func (r *redoAction) redo() {
 		return
 	}
 
-	ctx, _ := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
 	for _, failLine := range arrFailLine {
 		if err := r.limiter.Wait(ctx); err != nil {
 			logger.Errorf("limit wait error=%s", err)
