@@ -17,22 +17,22 @@ var (
 	M   = "m"
 )
 
-type TimeCost struct {
+type timeCost struct {
 	unit          string
 	paths         []string
 	pathTimePoint sync.Map
 	t             time.Time
 }
 
-func NewTimeCost() *TimeCost {
-	return &TimeCost{
+func NewTimeCost() *timeCost {
+	return &timeCost{
 		unit:  MS,
 		paths: make([]string, 0, 10),
 		t:     time.Now(),
 	}
 }
 
-func (tc *TimeCost) SetUnit(unit string) error {
+func (tc *timeCost) SetUnit(unit string) error {
 	if len(tc.paths) != 0 {
 		return errors.New("timecost has point")
 	}
@@ -44,14 +44,14 @@ func formatPointKey(pointName string, index int) string {
 	return pointName + strconv.Itoa(index)
 }
 
-// 打点
-func (tc *TimeCost) AddPoint(pointName string) {
+// 打点，点名称不要重复，要不然不好辨认
+func (tc *timeCost) AddPoint(pointName string) {
 	tc.paths = append(tc.paths, pointName)
 	tc.pathTimePoint.Store(formatPointKey(pointName, len(tc.paths)-1), time.Since(tc.t))
 	tc.t = time.Now()
 }
 
-func (tc *TimeCost) outputCost(d time.Duration) int64 {
+func (tc *timeCost) outputCost(d time.Duration) int64 {
 	switch tc.unit {
 	case NS:
 		return d.Nanoseconds()
@@ -69,7 +69,7 @@ func (tc *TimeCost) outputCost(d time.Duration) int64 {
 }
 
 // 输出链路
-func (tc *TimeCost) OutputCostStack() string {
+func (tc *timeCost) OutputCostStack() string {
 	var totalCost time.Duration
 	arrPointCost := make([]string, len(tc.paths)+2)
 	arrPointCost[0] = "Begin"
@@ -88,7 +88,7 @@ func (tc *TimeCost) OutputCostStack() string {
 }
 
 // 输出两段路径之间的耗时
-func (tc *TimeCost) OutputCostTime(bgnName, endName string) int64 {
+func (tc *timeCost) OutputCostTime(bgnName, endName string) int64 {
 	var bgnTime, endTime time.Duration = 0, 0
 	for index, pointName := range tc.paths {
 		if bgnTime != 0 && endTime != 0 {
@@ -110,7 +110,7 @@ func (tc *TimeCost) OutputCostTime(bgnName, endName string) int64 {
 }
 
 // 输出总耗时
-func (tc *TimeCost) OutputTotalTime() int64 {
+func (tc *timeCost) OutputTotalTime() int64 {
 	var totalCost time.Duration
 	for index, pointName := range tc.paths {
 		duration, ok := tc.pathTimePoint.Load(formatPointKey(pointName, index))
