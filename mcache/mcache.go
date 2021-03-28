@@ -2,22 +2,23 @@ package mcache
 
 import (
 	"container/list"
+	"errors"
 	"sync"
+
+	"github.com/jacktrane/gocomponent/time_format"
 )
 
-// LRU
+// 优先做一个LRU吧，使用双向链表
 // TODO LFU
 type mcacheDO struct {
 	omap *sync.Map // 元数据字典
 	list *list.List
 }
 
-type dataNode struct {
-	dataName string
-	expire   int64
-	num      int // 使用次数
-	preNode  *dataNode
-	nextNode *dataNode
+type ValueDO struct {
+	oValue interface{}
+	expire int64
+	ele    *list.Element
 }
 
 func NewMcache() *mcacheDO {
@@ -27,15 +28,48 @@ func NewMcache() *mcacheDO {
 	}
 }
 
-// TODO 过期时间
-func (m *mcacheDO) Set(key string, val interface{}, expire ...int64) {
-	m.omap.Store(key, val)
+func (m *mcacheDO) Set(key, val interface{}, expire ...int64) {
+	var v ValueDO
+	v.oValue = val
+	if len(expire) != 0 {
+		v.expire = expire[0]
+	}
 
-	// nd := &dataNode{
-	// 	dataName: key,
-	// }
+	value, existed := m.omap.Load(key)
+	if existed {
+		actValue := value.(ValueDO)
+		actValue.oValue = val
+		m.omap.Store(key, actValue)
+		m.list.MoveToFront(value.(ValueDO).ele)
+		return
+	}
+
+	v.ele = m.list.PushFront(val)
+	m.omap.Store(key, v)
 }
 
-func (m *mcacheDO) Get(key string) interface{} {
-	return nil
+func (m *mcacheDO) Get(key interface{}) (interface{}, error) {
+	value, ok := m.omap.Load(key)
+	if !ok {
+		return nil, errors.New("value no existed")
+	}
+
+	// 清过期的值
+	if value.(ValueDO).expire < time_format.GetTimestamp() {
+		m.omap.Delete(key)
+		m.list.Remove(value.(ValueDO).ele)
+		return nil, errors.New("value expire")
+	}
+
+	m.list.MoveToFront(value.(ValueDO).ele)
+	return value.(ValueDO).oValue, nil
+}
+
+func (m *mcacheDO) Delete(key interface{}) {
+	value, ok := m.omap.Load(key)
+	if !ok {
+		return
+	}
+	m.omap.Delete(key)
+	m.list.Remove(value.(ValueDO).ele)
 }
