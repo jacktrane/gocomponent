@@ -69,6 +69,6 @@
 
 用例：参考 `time_cost/time_cost.go`
 
-## 四、TODO mcache
+## 四、mcache
 
 接下来写一个缓存
