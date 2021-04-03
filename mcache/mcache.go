@@ -55,7 +55,7 @@ func (m *mcacheDO) Get(key interface{}) (interface{}, error) {
 	}
 
 	// 清过期的值
-	if value.(ValueDO).expire < time_format.GetTimestamp() {
+	if value.(ValueDO).expire != 0 && value.(ValueDO).expire < time_format.GetTimestamp() {
 		m.omap.Delete(key)
 		m.list.Remove(value.(ValueDO).ele)
 		return nil, errors.New("value expire")

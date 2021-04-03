@@ -84,7 +84,7 @@ func (tc *timeCost) OutputCostStack() string {
 	}
 
 	arrPointCost[len(tc.paths)+2-1] = "End"
-	return "TotalCost:" + strconv.Itoa(int(tc.outputCost(totalCost))) + ";Detail:" + strings.Join(arrPointCost, "=>")
+	return "TotalCost:" + strconv.Itoa(int(tc.outputCost(totalCost))) + tc.unit + ";Detail:" + strings.Join(arrPointCost, "=>")
 }
 
 // 输出两段路径之间的耗时
