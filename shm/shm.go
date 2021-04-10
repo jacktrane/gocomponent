@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"syscall"
+	"sync"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 type shm1 struct {
 	shmId   uintptr
 	shmaddr uintptr
+	locker 	sync.RWMutex
 }
 
 func NewShm(key int, size int) (error, *shm1) {
@@ -36,6 +38,8 @@ func NewShm(key int, size int) (error, *shm1) {
 }
 
 func (s *shm1) Attach() (error, uintptr) {
+	s.locker.Lock()
+	defer s.locker.Unlock()
 	var (
 		err syscall.Errno
 	)
@@ -47,6 +51,8 @@ func (s *shm1) Attach() (error, uintptr) {
 }
 
 func (s *shm1) Close() error {
+	s.locker.Lock()
+	defer s.locker.Unlock()
 	_, _, err := syscall.Syscall(syscall.SYS_SHMDT, s.shmaddr, 0, 0)
 	if err != 0 {
 		return errors.New(err.Error())
