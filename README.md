@@ -79,3 +79,7 @@ LRU的缓存，但相对来说会存在一些IO，谨慎使用，一般来说需
 
 # TODO 六、uuid
 
+
+# 七、协程池
+
+用例： 参考 `gopool/gopool_test.go`
