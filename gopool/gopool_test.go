@@ -7,7 +7,7 @@ import (
 )
 
 func TestGoPool(t *testing.T) {
-	pool := NewPool(2, 0)
+	pool := NewGoPool(2, 0)
 	defer pool.Close()
 	for i := 0; i < 2; i++ {
 		p := Para{

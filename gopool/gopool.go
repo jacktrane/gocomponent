@@ -12,7 +12,7 @@ type GoFunc struct {
 
 // goNum 协程池的内woker数量，必填
 // chNum 管道大小
-func NewPool(workerNum, chNum int) *GoPool {
+func NewGoPool(workerNum, chNum int) *GoPool {
 	pool := GoPool{
 		goNum:   workerNum,
 		workers: make(chan GoFunc, chNum),
