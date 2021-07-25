@@ -6,8 +6,30 @@ import (
 	"time"
 )
 
+func TestGetElasticAddGoFunc(t *testing.T) {
+	pool := NewGoPool(100)
+	defer pool.Close()
+	for i := 0; i < 100000; i++ {
+		pool.ElasticAddGoFunc(f1, "1")
+	}
+	time.Sleep(10 * time.Second)
+}
+
+func TestGetWaitNum(t *testing.T) {
+	pool := NewGoPool(100)
+	defer pool.Close()
+	for i := 0; i < 1000; i++ {
+		fmt.Println(pool.WaitFuncNum())
+		if i == 200 {
+			pool.ChangeWorkerNum(200)
+		}
+		pool.AddGoFunc(f1, "1")
+	}
+	time.Sleep(10 * time.Second)
+}
+
 func TestGoPool(t *testing.T) {
-	pool := NewGoPool(2, 0)
+	pool := NewGoPool(2)
 	defer pool.Close()
 	for i := 0; i < 2; i++ {
 		p := Para{
@@ -53,4 +75,8 @@ type Para struct {
 func f(p interface{}) {
 	para := p.(Para)
 	fmt.Println(time.Now().UnixNano(), para.a, para.b, para.c, para.d)
+}
+
+func f1(p interface{}) {
+	time.Sleep(2 * time.Second)
 }
