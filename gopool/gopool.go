@@ -4,16 +4,20 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/jacktrane/gocomponent/basic"
 )
 
 // TODO 不能一直占着茅坑不拉屎，得想办法缩减协程
 
 // GoPool 协程池
 type GoPool struct {
-	workerNum int
-	workers   chan GoFunc
-	l         sync.Locker
-	reloadNum int32
+	workerNum  int
+	oWorkerNum int // 最原始的worker数量
+	workers    chan GoFunc
+	l          sync.Locker
+	reloadNum  int32
 }
 
 // GoFunc 协程池函数
@@ -25,21 +29,39 @@ type GoFunc struct {
 // NewGoPool 初始化协程池
 // workerNum 协程池大小
 func NewGoPool(workerNum int) *GoPool {
-	return newGP(workerNum)
+	pool := newGP(workerNum)
+	go pool.watch()
+	return pool
 }
 
-func newGP(wokerNum int) *GoPool {
+func newGP(workerNum int) *GoPool {
 	pool := GoPool{
-		workerNum: wokerNum,
-		workers:   make(chan GoFunc, wokerNum),
-		l:         &sync.Mutex{},
+		workerNum:  workerNum,
+		oWorkerNum: workerNum,
+		workers:    make(chan GoFunc, workerNum),
+		l:          &sync.Mutex{},
 	}
 
-	for i := 0; i < wokerNum; i++ {
+	for i := 0; i < workerNum; i++ {
 		go pool.worker()
 	}
 
 	return &pool
+}
+
+// 监控协程池变化，太多闲置就进行缩减
+func (gp *GoPool) watch() {
+	for {
+
+		// 如果比策略调整前的数据还小就要缩容
+		waitFuncNum := gp.WaitFuncNum()
+		policyNum := gp.policy(false)
+		if policyNum > waitFuncNum && gp.workerNum > gp.oWorkerNum {
+			gp.ChangeWorkerNum(policyNum)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func (gp *GoPool) worker() {
@@ -60,11 +82,10 @@ func (gp *GoPool) AddGoFunc(f func(para interface{}), para interface{}) {
 func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
 	fmt.Println("gp reloadNum", gp.reloadNum, gp.workerNum)
 	if gp.WaitFuncNum() == gp.workerNum {
-		num := gp.workerNum + gp.workerNum/(int(gp.reloadNum)+1)
+		num := gp.policy(true)
 		atomic.AddInt32(&gp.reloadNum, 1)
 		gp.ChangeWorkerNum(num)
 	}
-
 	gp.workers <- GoFunc{
 		f:    f,
 		para: para,
@@ -96,3 +117,10 @@ func (gp *GoPool) ChangeWorkerNum(num int) {
 		go gp.worker()
 	}
 }
+
+func (gp *GoPool) policy(needExpand bool) int {
+	meta := gp.workerNum / (int(gp.reloadNum) + 1)
+	return basic.IfElseInt(needExpand, gp.workerNum+meta, gp.workerNum-meta)
+}
+
+func emptyFunc(emptyPara interface{}) {}
