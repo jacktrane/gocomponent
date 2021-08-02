@@ -9,14 +9,13 @@ import (
 	"github.com/jacktrane/gocomponent/basic"
 )
 
-// TODO 不能一直占着茅坑不拉屎，得想办法缩减协程
-
 // GoPool 协程池
 type GoPool struct {
 	workerNum  int
 	oWorkerNum int // 最原始的worker数量
 	workers    chan GoFunc
-	l          sync.Locker
+	inputL     sync.Locker
+	chL        sync.Locker
 	reloadNum  int32
 }
 
@@ -39,7 +38,8 @@ func newGP(workerNum int) *GoPool {
 		workerNum:  workerNum,
 		oWorkerNum: workerNum,
 		workers:    make(chan GoFunc, workerNum),
-		l:          &sync.Mutex{},
+		inputL:     &sync.Mutex{},
+		chL:        &sync.Mutex{},
 	}
 
 	for i := 0; i < workerNum; i++ {
@@ -52,15 +52,15 @@ func newGP(workerNum int) *GoPool {
 // 监控协程池变化，太多闲置就进行缩减
 func (gp *GoPool) watch() {
 	for {
-
 		// 如果比策略调整前的数据还小就要缩容
 		waitFuncNum := gp.WaitFuncNum()
 		policyNum := gp.policy(false)
 		if policyNum > waitFuncNum && gp.workerNum > gp.oWorkerNum {
+			fmt.Println("flex", policyNum)
 			gp.ChangeWorkerNum(policyNum)
 		}
 
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 	}
 }
 
@@ -80,12 +80,15 @@ func (gp *GoPool) AddGoFunc(f func(para interface{}), para interface{}) {
 
 // ElasticAddGoFunc 弹性扩容
 func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
-	fmt.Println("gp reloadNum", gp.reloadNum, gp.workerNum)
 	if gp.WaitFuncNum() == gp.workerNum {
+		fmt.Println("gp reloadNum", gp.reloadNum, gp.workerNum)
 		num := gp.policy(true)
 		atomic.AddInt32(&gp.reloadNum, 1)
 		gp.ChangeWorkerNum(num)
 	}
+	// TODO 这里有问题，串行意义不大
+	gp.chL.Lock()
+	defer gp.chL.Unlock()
 	gp.workers <- GoFunc{
 		f:    f,
 		para: para,
@@ -103,15 +106,15 @@ func (gp *GoPool) WaitFuncNum() int {
 }
 
 // ChangeWorkerNum 修改worker的数量
+// 弹性过程中事实上有时候会出现double倍协程
 func (gp *GoPool) ChangeWorkerNum(num int) {
-	gp.l.Lock()
-	defer gp.l.Unlock()
-
+	gp.chL.Lock()
 	chgCh := make(chan GoFunc, num)
 	tmpCh := gp.workers
 	gp.workers = chgCh
 	gp.workerNum = num
 	close(tmpCh)
+	gp.chL.Unlock()
 
 	for i := 0; i < num; i++ {
 		go gp.worker()
