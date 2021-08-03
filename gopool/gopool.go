@@ -14,9 +14,9 @@ type GoPool struct {
 	workerNum  int
 	oWorkerNum int // 最原始的worker数量
 	workers    chan GoFunc
-	inputL     sync.Locker
 	chL        sync.Locker
 	reloadNum  int32
+	reloading  uint32 // 原子操作
 }
 
 // GoFunc 协程池函数
@@ -38,7 +38,6 @@ func newGP(workerNum int) *GoPool {
 		workerNum:  workerNum,
 		oWorkerNum: workerNum,
 		workers:    make(chan GoFunc, workerNum),
-		inputL:     &sync.Mutex{},
 		chL:        &sync.Mutex{},
 	}
 
@@ -55,12 +54,12 @@ func (gp *GoPool) watch() {
 		// 如果比策略调整前的数据还小就要缩容
 		waitFuncNum := gp.WaitFuncNum()
 		policyNum := gp.policy(false)
-		if policyNum > waitFuncNum && gp.workerNum > gp.oWorkerNum {
+		if policyNum > waitFuncNum && gp.workerNum > gp.oWorkerNum && policyNum > gp.oWorkerNum {
 			fmt.Println("flex", policyNum)
 			gp.ChangeWorkerNum(policyNum)
 		}
 
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -72,10 +71,11 @@ func (gp *GoPool) worker() {
 
 // AddGoFunc 添加函数
 func (gp *GoPool) AddGoFunc(f func(para interface{}), para interface{}) {
-	gp.workers <- GoFunc{
+	goFounc := GoFunc{
 		f:    f,
 		para: para,
 	}
+	gp.workers <- goFounc
 }
 
 // ElasticAddGoFunc 弹性扩容
@@ -86,12 +86,17 @@ func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
 		atomic.AddInt32(&gp.reloadNum, 1)
 		gp.ChangeWorkerNum(num)
 	}
-	// TODO 这里有问题，串行意义不大
-	gp.chL.Lock()
-	defer gp.chL.Unlock()
-	gp.workers <- GoFunc{
+
+	goFounc := GoFunc{
 		f:    f,
 		para: para,
+	}
+
+	for {
+		if atomic.LoadUint32(&gp.reloading) == 0 {
+			gp.workers <- goFounc
+			break
+		}
 	}
 }
 
@@ -108,14 +113,24 @@ func (gp *GoPool) WaitFuncNum() int {
 // ChangeWorkerNum 修改worker的数量
 // 弹性过程中事实上有时候会出现double倍协程
 func (gp *GoPool) ChangeWorkerNum(num int) {
+	// 串行改变协程数量
 	gp.chL.Lock()
+	defer gp.chL.Unlock()
+
+	// 用原子方式保证不往已关闭的channel塞数据
+	if atomic.LoadUint32(&gp.reloading) != 0 {
+		fmt.Println("gp.reloading")
+		return
+	}
+	atomic.StoreUint32(&gp.reloading, 1)
+	defer atomic.CompareAndSwapUint32(&gp.reloading, 1, 0)
+
 	chgCh := make(chan GoFunc, num)
 	tmpCh := gp.workers
+	defer close(tmpCh)
+
 	gp.workers = chgCh
 	gp.workerNum = num
-	close(tmpCh)
-	gp.chL.Unlock()
-
 	for i := 0; i < num; i++ {
 		go gp.worker()
 	}

@@ -9,7 +9,7 @@ import (
 func TestGetElasticAddGoFunc(t *testing.T) {
 	pool := NewGoPool(100)
 	defer pool.Close()
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 1000000; i++ {
 		pool.ElasticAddGoFunc(f1, "1")
 	}
 	time.Sleep(10 * time.Second)
