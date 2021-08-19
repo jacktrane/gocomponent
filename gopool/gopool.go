@@ -13,10 +13,15 @@ import (
 type GoPool struct {
 	workerNum  int
 	oWorkerNum int // 最原始的worker数量
-	workers    chan GoFunc
-	chL        sync.Locker
+	workers    Worker
+	chL        sync.Locker // worker大小reload的时候进行加锁控制
 	reloadNum  int32
-	reloading  uint32 // 原子操作
+}
+
+// Worker 用于运行func的结构体
+type Worker struct {
+	chGoFunc chan GoFunc
+	deleted  uint32
 }
 
 // GoFunc 协程池函数
@@ -37,7 +42,7 @@ func newGP(workerNum int) *GoPool {
 	pool := GoPool{
 		workerNum:  workerNum,
 		oWorkerNum: workerNum,
-		workers:    make(chan GoFunc, workerNum),
+		workers:    Worker{chGoFunc: make(chan GoFunc, workerNum)},
 		chL:        &sync.Mutex{},
 	}
 
@@ -64,7 +69,7 @@ func (gp *GoPool) watch() {
 }
 
 func (gp *GoPool) worker() {
-	for worker := range gp.workers {
+	for worker := range gp.workers.chGoFunc {
 		worker.f(worker.para)
 	}
 }
@@ -75,10 +80,10 @@ func (gp *GoPool) AddGoFunc(f func(para interface{}), para interface{}) {
 		f:    f,
 		para: para,
 	}
-	gp.workers <- goFounc
+	gp.workers.chGoFunc <- goFounc
 }
 
-// ElasticAddGoFunc 弹性扩容
+// ElasticAddGoFunc 弹性扩容 TODO 这个没有什么场景，是可以去掉的
 func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
 	if gp.WaitFuncNum() == gp.workerNum {
 		fmt.Println("gp reloadNum", gp.reloadNum, gp.workerNum)
@@ -93,8 +98,8 @@ func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
 	}
 
 	for {
-		if atomic.LoadUint32(&gp.reloading) == 0 {
-			gp.workers <- goFounc
+		if atomic.LoadUint32(&gp.workers.deleted) == 0 {
+			gp.workers.chGoFunc <- goFounc
 			break
 		}
 	}
@@ -102,12 +107,13 @@ func (gp *GoPool) ElasticAddGoFunc(f func(para interface{}), para interface{}) {
 
 // Close 关闭协程池
 func (gp *GoPool) Close() {
-	close(gp.workers)
+	atomic.StoreUint32(&gp.workers.deleted, 1)
+	close(gp.workers.chGoFunc)
 }
 
 // WaitFuncNum 排队数量
 func (gp *GoPool) WaitFuncNum() int {
-	return len(gp.workers)
+	return len(gp.workers.chGoFunc)
 }
 
 // ChangeWorkerNum 修改worker的数量
@@ -117,17 +123,10 @@ func (gp *GoPool) ChangeWorkerNum(num int) {
 	gp.chL.Lock()
 	defer gp.chL.Unlock()
 
-	// 用原子方式保证不往已关闭的channel塞数据
-	if atomic.LoadUint32(&gp.reloading) != 0 {
-		fmt.Println("gp.reloading")
-		return
-	}
-	atomic.StoreUint32(&gp.reloading, 1)
-	defer atomic.CompareAndSwapUint32(&gp.reloading, 1, 0)
-
-	chgCh := make(chan GoFunc, num)
+	chgCh := Worker{chGoFunc: make(chan GoFunc, num)}
 	tmpCh := gp.workers
-	defer close(tmpCh)
+	atomic.AddUint32(&tmpCh.deleted, 1)
+	defer close(tmpCh.chGoFunc)
 
 	gp.workers = chgCh
 	gp.workerNum = num
