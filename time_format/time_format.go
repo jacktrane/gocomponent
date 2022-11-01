@@ -27,6 +27,7 @@ const (
 	Sec  = "05"
 )
 
+// 获取时间戳
 func GetTimestamp() int64 {
 	return time.Now().Unix()
 }
@@ -43,4 +44,18 @@ func GetParseTime(formatStr, date string) (error, *time.Time) {
 func GetNowTime() *time.Time {
 	tTime := time.Now()
 	return &tTime
+}
+
+// 指定时间所属的一天的开始与结束时间
+func SpecDayBgnAndEndTime(t *time.Time) (bgn, end *time.Time) {
+	bgnTime := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	endTime := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, t.Location())
+	return &bgnTime, &endTime
+}
+
+// 指定时间所属的小时点的开始与结束时间
+func SpecHourBgnAndEndTime(t *time.Time) (bgn, end *time.Time) {
+	bgnTime := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
+	endTime := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 59, 59, 0, t.Location())
+	return &bgnTime, &endTime
 }
