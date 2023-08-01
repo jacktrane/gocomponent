@@ -74,7 +74,6 @@ func (tc *timeCost) OutputCostStack() string {
 	arrPointCost := make([]string, len(tc.paths)+2)
 	arrPointCost[0] = "Begin"
 	for index, pointName := range tc.paths {
-		fmt.Println(pointName)
 		duration, ok := tc.pathTimePoint.Load(formatPointKey(pointName, index))
 		if ok {
 			timeDuration := duration.(time.Duration)
