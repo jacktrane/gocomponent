@@ -100,7 +100,7 @@ func Infof(format string, args ...interface{}) {
 
 func Info(v ...interface{}) {
 	if gLogFile.level >= InfoLevel {
-		log.SetPrefix("[Info] 111111")
+		log.SetPrefix("[Info] ")
 		output(fmt.Sprint(v...))
 	}
 }
