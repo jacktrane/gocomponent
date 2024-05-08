@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/jacktrane/gocomponent/basic"
@@ -101,7 +100,7 @@ func Infof(format string, args ...interface{}) {
 
 func Info(v ...interface{}) {
 	if gLogFile.level >= InfoLevel {
-		log.SetPrefix("[Info] ")
+		log.SetPrefix("[Info] 111111")
 		output(fmt.Sprint(v...))
 	}
 }
@@ -225,25 +224,6 @@ func (lf *LogFile) createLogFile() {
 	}
 
 	lf.fileFd = createFile(lf.fileName)
-}
-
-func createFile(fileName string) *os.File {
-	var fileFd *os.File
-	for index := 0; index < 10; index++ {
-		if fd, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, os.ModePerm); nil == err {
-			fileFd.Sync()
-			fileFd.Close()
-			fileFd = fd
-
-			// 下面是为了重定向标准输出到文件中，因为painc，Dup2仅能在linux运行哦，所以如果在window下注释
-			syscall.Dup2(int(fileFd.Fd()), int(os.Stderr.Fd()))
-			break
-		}
-
-		fileFd = nil
-	}
-
-	return fileFd
 }
 
 func (lf LogFile) clearLog() {
